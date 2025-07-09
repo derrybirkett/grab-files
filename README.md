@@ -50,7 +50,6 @@ When you select "Move to..." or "Copy to...":
 - **Keyboard shortcuts**: Use `Cmd+Return` to select a folder, `Cmd+W` to cancel
 
 ### Alternative Workflows
-- **Quick grab**: Use "Grab Files (Quick)" for a no-view command that just grabs files
 - **Search**: Use the search bar to filter your grabbed files
 
 ## Preferences
