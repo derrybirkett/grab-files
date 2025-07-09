@@ -13,7 +13,24 @@
       "title": "Grab files",
       "subtitle": "Grabs files ready for action",
       "description": "Grabs files for execution",
+      "mode": "view"
+    },
+    {
+      "name": "grab-files-quick",
+      "title": "Grab Files (Quick)",
+      "subtitle": "Quickly grab selected files from Finder",
+      "description": "Select files in Finder and run this to grab them",
       "mode": "no-view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "defaultDestination",
+      "type": "textfield",
+      "required": false,
+      "title": "Default Destination",
+      "description": "Default folder to move files to (e.g., ~/Desktop, ~/Documents)",
+      "placeholder": "~/Desktop"
     }
   ],
   "dependencies": {
@@ -35,5 +52,6 @@
     "lint": "ray lint",
     "prepublishOnly": "echo \"\\n\\nIt seems like you are trying to publish the Raycast extension to npm.\\n\\nIf you did intend to publish it to npm, remove the \\`prepublishOnly\\` script and rerun \\`npm publish\\` again.\\nIf you wanted to publish it to the Raycast Store instead, use \\`npm run publish\\` instead.\\n\\n\" && exit 1",
     "publish": "npx @raycast/api@latest publish"
-  }
+  },
+  "main": "src/grab-files.tsx"
 }
