@@ -3,6 +3,7 @@
   "name": "grab-files",
   "title": "Grab Files",
   "description": "Grabs files for execution",
+  "version": "1.0.2",
   "icon": "extension-icon.png",
   "author": "derry_birkett",
   "license": "MIT",
