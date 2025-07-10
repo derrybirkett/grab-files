@@ -5,6 +5,7 @@
   "description": "Grabs files for execution",
   "version": "1.0.2",
   "icon": "extension-icon.png",
+  "author": "dbrktt",
   "license": "MIT",
   "commands": [
     {
