@@ -267,6 +267,7 @@ export default function Command() {
       return;
     }
 
+    setIsCopyMode(false);
     setIsFolderSearchMode(true);
     setSearchText("");
     setFolderSearchResults(getCommonDirectories());
