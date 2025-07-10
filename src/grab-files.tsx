@@ -9,9 +9,6 @@ import {
   open,
   getSelectedFinderItems,
   showHUD,
-  getApplications,
-  closeMainWindow,
-  popToRoot,
 } from "@raycast/api";
 import { useState, useEffect } from "react";
 import * as fs from "fs";
@@ -84,8 +81,8 @@ export default function Command() {
     ];
 
     return commonDirs
-      .filter(dir => fs.existsSync(dir.path))
-      .map(dir => ({
+      .filter((dir) => fs.existsSync(dir.path))
+      .map((dir) => ({
         path: dir.path,
         name: dir.name,
         isDirectory: true,
@@ -98,13 +95,9 @@ export default function Command() {
     try {
       const results: FolderItem[] = [];
       const homeDir = os.homedir();
-      
+
       // Search in common locations
-      const searchPaths = [
-        homeDir,
-        "/Applications",
-        "/Users",
-      ];
+      const searchPaths = [homeDir, "/Applications", "/Users"];
 
       for (const searchPath of searchPaths) {
         if (fs.existsSync(searchPath)) {
@@ -132,25 +125,25 @@ export default function Command() {
   };
 
   const searchDirectory = async (
-    dirPath: string, 
-    query: string, 
-    results: FolderItem[], 
+    dirPath: string,
+    query: string,
+    results: FolderItem[],
     depth: number,
-    maxDepth: number = 3
+    maxDepth: number = 3,
   ) => {
     if (depth > maxDepth || results.length >= 50) return;
 
     try {
       const items = fs.readdirSync(dirPath);
-      
+
       for (const item of items) {
         if (results.length >= 50) break;
-        
+
         const itemPath = path.join(dirPath, item);
-        
+
         try {
           const stats = fs.statSync(itemPath);
-          
+
           if (stats.isDirectory()) {
             // Check if directory name matches query
             if (item.toLowerCase().includes(query)) {
@@ -161,7 +154,7 @@ export default function Command() {
                 depth,
               });
             }
-            
+
             // Recursively search subdirectories
             if (depth < maxDepth) {
               await searchDirectory(itemPath, query, results, depth + 1, maxDepth);
@@ -181,11 +174,22 @@ export default function Command() {
     try {
       const stored = await LocalStorage.getItem<string>("grabbedFiles");
       if (stored) {
-        const files = JSON.parse(stored).map((file: any) => ({
-          ...file,
-          dateModified: new Date(file.dateModified),
-        }));
-        setGrabbedFiles(files);
+        const files = JSON.parse(stored).map(
+          (file: { path: string; name: string; size: number; dateModified: string }) => ({
+            ...file,
+            dateModified: new Date(file.dateModified),
+          }),
+        );
+        
+        // Filter out files that no longer exist at their original paths
+        const validFiles = files.filter((f: GrabbedFile) => fs.existsSync(f.path));
+        
+        if (validFiles.length !== files.length) {
+          // Some files no longer exist, update storage
+          await saveGrabbedFiles(validFiles);
+        }
+        
+        setGrabbedFiles(validFiles);
       }
     } catch (error) {
       console.error("Error loading grabbed files:", error);
@@ -218,20 +222,25 @@ export default function Command() {
       }
 
       if (newFiles.length > 0) {
-        // Filter out duplicates
-        const existingPaths = new Set(grabbedFiles.map(f => f.path));
-        const uniqueNewFiles = newFiles.filter(f => !existingPaths.has(f.path));
+        // Filter out duplicates and files that no longer exist at their original paths
+        const existingPaths = new Set(grabbedFiles.map((f) => f.path));
+        const uniqueNewFiles = newFiles.filter((f) => !existingPaths.has(f.path));
+
+        // Also filter out any existing files that no longer exist at their paths
+        const validExistingFiles = grabbedFiles.filter((f: GrabbedFile) => fs.existsSync(f.path));
         
-        if (uniqueNewFiles.length > 0) {
-          const updatedFiles = [...grabbedFiles, ...uniqueNewFiles];
+        if (uniqueNewFiles.length > 0 || validExistingFiles.length !== grabbedFiles.length) {
+          const updatedFiles = [...validExistingFiles, ...uniqueNewFiles];
           setGrabbedFiles(updatedFiles);
           await saveGrabbedFiles(updatedFiles);
 
-          await showToast({
-            style: Toast.Style.Success,
-            title: `Grabbed ${uniqueNewFiles.length} file${uniqueNewFiles.length === 1 ? "" : "s"}`,
-            message: `Total: ${updatedFiles.length} grabbed files`,
-          });
+          if (uniqueNewFiles.length > 0) {
+            await showToast({
+              style: Toast.Style.Success,
+              title: `Grabbed ${uniqueNewFiles.length} file${uniqueNewFiles.length === 1 ? "" : "s"}`,
+              message: `Total: ${updatedFiles.length} grabbed files`,
+            });
+          }
         }
       }
     } catch (error) {
@@ -248,84 +257,6 @@ export default function Command() {
     }
   };
 
-  const addFilesFromFinder = async () => {
-    try {
-      const selectedItems = await getSelectedFinderItems();
-      const newFiles: GrabbedFile[] = [];
-
-      for (const item of selectedItems) {
-        // Check if it's a file (not a folder)
-        try {
-          const stats = fs.statSync(item.path);
-          if (stats.isFile()) {
-            newFiles.push({
-              path: item.path,
-              name: path.basename(item.path),
-              size: stats.size,
-              dateModified: stats.mtime,
-            });
-          }
-        } catch {
-          // Skip files that can't be accessed
-          continue;
-        }
-      }
-
-      if (newFiles.length === 0) {
-        await showToast({
-          style: Toast.Style.Failure,
-          title: "No files selected",
-          message: "Please select files in Finder first",
-        });
-        return;
-      }
-
-      // Filter out duplicates
-      const existingPaths = new Set(grabbedFiles.map(f => f.path));
-      const uniqueNewFiles = newFiles.filter(f => !existingPaths.has(f.path));
-      
-      const updatedFiles = [...grabbedFiles, ...uniqueNewFiles];
-      setGrabbedFiles(updatedFiles);
-      await saveGrabbedFiles(updatedFiles);
-
-      await showToast({
-        style: Toast.Style.Success,
-        title: `Added ${uniqueNewFiles.length} file${uniqueNewFiles.length === 1 ? "" : "s"}`,
-        message: `Total: ${updatedFiles.length} grabbed files`,
-      });
-    } catch (error) {
-      console.error("Error adding files:", error);
-      await showToast({
-        style: Toast.Style.Failure,
-        title: "Error adding files",
-        message: "Please make sure files are selected in Finder",
-      });
-    }
-  };
-
-  const removeFile = async (filePath: string) => {
-    const updatedFiles = grabbedFiles.filter(f => f.path !== filePath);
-    setGrabbedFiles(updatedFiles);
-    await saveGrabbedFiles(updatedFiles);
-    
-    await showToast({
-      style: Toast.Style.Success,
-      title: "File removed",
-      message: "File removed from grabbed files",
-    });
-  };
-
-  const clearAllFiles = async () => {
-    setGrabbedFiles([]);
-    await saveGrabbedFiles([]);
-    
-    await showToast({
-      style: Toast.Style.Success,
-      title: "Cleared all files",
-      message: "All grabbed files have been removed",
-    });
-  };
-
   const startFolderSearch = () => {
     if (grabbedFiles.length === 0) {
       showToast({
@@ -335,7 +266,7 @@ export default function Command() {
       });
       return;
     }
-    
+
     setIsFolderSearchMode(true);
     setSearchText("");
     setFolderSearchResults(getCommonDirectories());
@@ -351,7 +282,7 @@ export default function Command() {
   const moveFilesToDestination = async (destination: string) => {
     try {
       // Expand tilde to home directory
-      const expandedDestination = destination.startsWith("~") 
+      const expandedDestination = destination.startsWith("~")
         ? destination.replace("~", process.env.HOME || "")
         : destination;
 
@@ -372,7 +303,7 @@ export default function Command() {
           }
 
           const destinationPath = path.join(expandedDestination, file.name);
-          
+
           // Handle duplicate names
           let finalDestinationPath = destinationPath;
           let counter = 1;
@@ -424,7 +355,7 @@ export default function Command() {
   const copyFilesToDestination = async (destination: string) => {
     try {
       // Expand tilde to home directory
-      const expandedDestination = destination.startsWith("~") 
+      const expandedDestination = destination.startsWith("~")
         ? destination.replace("~", process.env.HOME || "")
         : destination;
 
@@ -445,7 +376,7 @@ export default function Command() {
           }
 
           const destinationPath = path.join(expandedDestination, file.name);
-          
+
           // Handle duplicate names
           let finalDestinationPath = destinationPath;
           let counter = 1;
@@ -503,7 +434,7 @@ export default function Command() {
           }
 
           // Move file to trash using macOS trash command
-          const { execSync } = require('child_process');
+          const { execSync } = await import("child_process");
           execSync(`mv "${file.path}" ~/.Trash/`);
           successCount++;
         } catch (error) {
@@ -546,7 +477,7 @@ export default function Command() {
       });
       return;
     }
-    
+
     setIsCopyMode(true);
     setIsFolderSearchMode(true);
     setSearchText("");
@@ -555,13 +486,11 @@ export default function Command() {
 
   const openDestination = async () => {
     const destination = preferences.defaultDestination || "~/Desktop";
-    const expandedPath = destination.startsWith("~") 
-      ? destination.replace("~", process.env.HOME || "")
-      : destination;
-    
+    const expandedPath = destination.startsWith("~") ? destination.replace("~", process.env.HOME || "") : destination;
+
     try {
       await open(expandedPath);
-    } catch (error) {
+    } catch {
       await showToast({
         style: Toast.Style.Failure,
         title: "Error opening destination",
@@ -578,9 +507,10 @@ export default function Command() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
   };
 
-  const filteredFiles = grabbedFiles.filter(file =>
-    file.name.toLowerCase().includes(searchText.toLowerCase()) ||
-    file.path.toLowerCase().includes(searchText.toLowerCase())
+  const filteredFiles = grabbedFiles.filter(
+    (file) =>
+      file.name.toLowerCase().includes(searchText.toLowerCase()) ||
+      file.path.toLowerCase().includes(searchText.toLowerCase()),
   );
 
   // If in folder search mode, show folder search interface
@@ -610,14 +540,18 @@ export default function Command() {
               title={folder.name}
               subtitle={folder.path}
               accessories={[
-                { text: `${grabbedFiles.length} file${grabbedFiles.length === 1 ? "" : "s"} to ${isCopyMode ? "copy" : "move"}` },
+                {
+                  text: `${grabbedFiles.length} file${grabbedFiles.length === 1 ? "" : "s"} to ${isCopyMode ? "copy" : "move"}`,
+                },
               ]}
               actions={
                 <ActionPanel>
                   <Action
                     title={`${isCopyMode ? "Copy" : "Move"} ${grabbedFiles.length} File${grabbedFiles.length === 1 ? "" : "s"} Here`}
                     icon={isCopyMode ? "doc-on-doc" : "arrow-right"}
-                    onAction={() => isCopyMode ? copyFilesToDestination(folder.path) : moveFilesToDestination(folder.path)}
+                    onAction={() =>
+                      isCopyMode ? copyFilesToDestination(folder.path) : moveFilesToDestination(folder.path)
+                    }
                     shortcut={{ modifiers: ["cmd"], key: "return" }}
                   />
                   <Action
@@ -646,13 +580,13 @@ export default function Command() {
           {grabbedFiles.length > 0 && (
             <>
               <Action
-                title="Move to..."
+                title="Move to…"
                 icon="arrow-right"
                 onAction={startFolderSearch}
                 shortcut={{ modifiers: ["cmd"], key: "m" }}
               />
               <Action
-                title="Copy to..."
+                title="Copy to…"
                 icon="doc-on-doc"
                 onAction={startCopySearch}
                 shortcut={{ modifiers: ["cmd", "shift"], key: "c" }}
@@ -690,20 +624,17 @@ export default function Command() {
                 icon="📄"
                 title={file.name}
                 subtitle={file.path}
-                accessories={[
-                  { text: formatFileSize(file.size) },
-                  { text: file.dateModified.toLocaleDateString() },
-                ]}
+                accessories={[{ text: formatFileSize(file.size) }, { text: file.dateModified.toLocaleDateString() }]}
                 actions={
                   <ActionPanel>
                     <Action
-                      title="Move to..."
+                      title="Move to…"
                       icon="arrow-right"
                       onAction={startFolderSearch}
                       shortcut={{ modifiers: ["cmd"], key: "m" }}
                     />
                     <Action
-                      title="Copy to..."
+                      title="Copy to…"
                       icon="doc-on-doc"
                       onAction={startCopySearch}
                       shortcut={{ modifiers: ["cmd", "shift"], key: "c" }}

@@ -1,16 +1,15 @@
 {
   "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "grab-files",
-  "title": "Grab files",
+  "title": "Grab Files",
   "description": "Grabs files for execution",
   "icon": "extension-icon.png",
   "author": "derry_birkett",
-  "owner": "monospace-studio",
   "license": "MIT",
   "commands": [
     {
       "name": "grab-files",
-      "title": "Grab files",
+      "title": "Grab Files",
       "subtitle": "Grabs files ready for action",
       "description": "Grabs files for execution",
       "mode": "view"
